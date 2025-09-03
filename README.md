@@ -6,3 +6,8 @@ Utilities for automating the discovery of system/network topology on MOC GPU nod
 ```
 python network_discovery.py
 ```
+
+## System discovery
+```
+python system_discovery.py
+```
