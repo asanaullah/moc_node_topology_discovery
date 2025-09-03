@@ -1,0 +1,2 @@
+# moc_node_topology_discovery
+Utilities for automating the discovery of system/network topology on MOC GPU nodes. The discovery is designed to be extensible for multi-vendor hardware (GPUs and NICs).
