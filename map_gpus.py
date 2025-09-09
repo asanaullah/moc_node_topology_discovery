@@ -62,6 +62,55 @@ def get_pci_distance(pci_addr1, pci_addr2):
     return dist1 + dist2
 
 
+def get_nic_info(hca_name, iface_name):
+    """
+    Retrieves NIC info such as RoCE GID list and the network interface MTU.
+
+    Args:
+        hca_name (str): The name of the Host Channel Adapter (e.g., 'mlx5_0').
+        iface_name (str): The name of the network interface (e.g., 'ens3f0').
+
+    Returns:
+        dict: A dictionary containing 'gid_list' and 'mtu'.
+    """
+    details = {'gid_list': [], 'mtu': None}
+
+    # --- Get GID List using ibv_devinfo ---
+    if hca_name and hca_name != "N/A":
+        try:
+            # The '-v' flag is needed to display the GID table
+            cmd = ["ibv_devinfo", "-d", hca_name, "-v"]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            
+            # Regex to find GIDs associated with RoCE
+            # Pattern: Matches lines starting with GID[...], captures the GID value before the comma
+            print("  - Warning: Assuming GID list is sorted in ibv_devinfo")
+            gid_pattern = re.compile(r"^\s*GID\[\s*\d+\]:\s+(.+?),\s+RoCE\s+v\d", re.MULTILINE)
+            gids = gid_pattern.findall(result.stdout)
+            details['gid_list'] = [{i: gids[i]} for i in range(len(gids))]
+
+        except (FileNotFoundError, subprocess.CalledProcessError) as e:
+            # ibv_devinfo might not be installed or might fail
+            print(f"  - Warning: Could not get GIDs for {hca_name}. Command failed: {e}", file=sys.stderr)
+
+    # --- Get MTU using the 'ip' command ---
+    if iface_name:
+        try:
+            cmd = ["ip", "addr", "show", iface_name]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+
+            # Regex to find the MTU value in the output
+            mtu_pattern = re.compile(r"mtu\s+(\d+)")
+            match = mtu_pattern.search(result.stdout)
+            if match:
+                details['mtu'] = int(match.group(1))
+
+        except (FileNotFoundError, subprocess.CalledProcessError) as e:
+            print(f"  - Warning: Could not get MTU for {iface_name}. Command failed: {e}", file=sys.stderr)
+
+    return details
+
+
 def get_gpu_nic_mappings():
     """
     Determines the closest high-speed NIC to each GPU by analyzing the
@@ -183,10 +232,17 @@ def get_gpu_nic_mappings():
             print(f"    - To NIC {nic['pci_addr']} ({nic['hca_name']}): {dist} hops")
             
         closest_nic = distances[0][1]
-        final_gpu_to_nic_map[gpu_id] = {}
-        final_gpu_to_nic_map[gpu_id]['hca_name']= closest_nic['hca_name']
-        final_gpu_to_nic_map[gpu_id]['iface_name']= closest_nic['iface_name']
-        final_gpu_to_nic_map[gpu_id]['inet_addr']= closest_nic['ipv4'][-1]
+
+        nic_info = get_nic_info(closest_nic['hca_name'], closest_nic['iface_name'])
+
+        final_gpu_to_nic_map[gpu_id] = {
+            'hca_name': closest_nic['hca_name'],
+            'iface_name': closest_nic['iface_name'],
+            'inet_addr': closest_nic['ipv4'][-1] if closest_nic['ipv4'] else None,
+            'gid_list': nic_info['gid_list'],
+            'mtu': nic_info['mtu']
+        }
+
         print(f"  ==> Closest NIC for GPU {gpu_id} is {closest_nic['hca_name']} ({closest_nic['pci_addr']})")
 
     print("\n--- Mapping Complete ---")

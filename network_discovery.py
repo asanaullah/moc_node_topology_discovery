@@ -50,8 +50,10 @@ def main():
         hca_name = gpu_map[gpu_id]['hca_name']
         iface_name = gpu_map[gpu_id]['iface_name']
         inet_addr = gpu_map[gpu_id]['inet_addr']
+        gid_list = gpu_map[gpu_id]['gid_list']
+        mtu = gpu_map[gpu_id]['mtu']
         gpu_key = f"gpu_{gpu_id}"
-        data_section[gpu_key] = {'id': gpu_id, 'inet': inet_addr, 'name': iface_name, 'hca': hca_name}
+        data_section[gpu_key] = {'id': gpu_id, 'inet': inet_addr, 'name': iface_name, 'hca': hca_name, 'mtu': mtu, 'GIDs': gid_list}
 
     all_ifnames = []
     all_hcas = []
